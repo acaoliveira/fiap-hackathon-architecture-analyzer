@@ -1,0 +1,163 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: hackathon-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hackathon-net
+
+  postgres-upload:
+    image: postgres:15-alpine
+    platform: linux/amd64
+    container_name: hackathon-postgres-upload
+    environment:
+      POSTGRES_DB: upload_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_upload_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hackathon-net
+
+  postgres-report:
+    image: postgres:15-alpine
+    platform: linux/amd64
+    container_name: hackathon-postgres-report
+    environment:
+      POSTGRES_DB: report_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_report_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hackathon-net
+
+  upload-service:
+    build:
+      context: ./services/upload-service
+      dockerfile: Dockerfile
+    container_name: hackathon-upload
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-upload:5432/upload_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      STORAGE_PATH: /shared/uploads
+      SERVICE_PORT: "8001"
+    volumes:
+      - shared_uploads:/shared/uploads
+    depends_on:
+      postgres-upload:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - hackathon-net
+    restart: on-failure
+
+  processing-service:
+    build:
+      context: ./services/processing-service
+      dockerfile: Dockerfile
+    container_name: hackathon-processing
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      UPLOAD_SERVICE_URL: http://upload-service:8001
+      REPORT_SERVICE_URL: http://report-service:8003
+      STORAGE_PATH: /shared/uploads
+    volumes:
+      - shared_uploads:/shared/uploads
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      upload-service:
+        condition: service_started
+    networks:
+      - hackathon-net
+    restart: on-failure
+
+  report-service:
+    build:
+      context: ./services/report-service
+      dockerfile: Dockerfile
+    container_name: hackathon-report
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-report:5432/report_db
+      RABBITMQ_URL: amqp://admin:admin@rabbitmq:5672/
+      SERVICE_PORT: "8003"
+    depends_on:
+      postgres-report:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - hackathon-net
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
+    container_name: hackathon-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - hackathon-net
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: hackathon-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      UPLOAD_SERVICE_URL: http://upload-service:8001
+      REPORT_SERVICE_URL: http://report-service:8003
+      SERVICE_PORT: "8000"
+    depends_on:
+      - upload-service
+      - report-service
+    networks:
+      - hackathon-net
+    restart: on-failure
+
+volumes:
+  postgres_upload_data:
+  postgres_report_data:
+  shared_uploads:
+
+networks:
+  hackathon-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1450"

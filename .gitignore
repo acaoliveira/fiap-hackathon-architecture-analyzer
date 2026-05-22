@@ -1,0 +1,19 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+# Certificados locais (não commitar)
+*.crt
+*.pem
+# Arquivos de geração de diagramas de teste
+gen_diagrams.py
+# Arquivos temporários do Word
+~$*
+# Outros
+ultimo_numero.txt

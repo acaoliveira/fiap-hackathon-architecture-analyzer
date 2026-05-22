@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FIAP Secure Systems — Analisador de Arquitetura</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface2: #273449;
+    --border: #334155; --text: #f1f5f9; --muted: #94a3b8;
+    --accent: #6366f1; --accent2: #818cf8;
+    --high: #ef4444; --high-bg: #450a0a;
+    --med: #f59e0b;  --med-bg:  #451a03;
+    --low: #22c55e;  --low-bg:  #052e16;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  header {
+    background: linear-gradient(135deg, #1e1b4b 0%, #1e293b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  header .logo { font-size: 28px; }
+  header h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+  header p  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+
+  /* Upload card */
+  .upload-card {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    text-align: center;
+    transition: border-color .2s, background .2s;
+    cursor: pointer;
+  }
+  .upload-card.drag-over { border-color: var(--accent); background: #1e1b4b33; }
+  .upload-icon { font-size: 52px; margin-bottom: 16px; }
+  .upload-card h2 { font-size: 20px; margin-bottom: 8px; }
+  .upload-card p  { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  #fileInput { display: none; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: white;
+    border: none; border-radius: 8px;
+    padding: 12px 28px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background .2s, transform .1s;
+  }
+  .btn:hover  { background: var(--accent2); }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { background: var(--border); cursor: not-allowed; }
+  .file-selected { margin-top: 16px; color: var(--accent2); font-size: 14px; font-weight: 500; }
+
+  /* Status bar */
+  .status-bar {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 28px;
+    margin-top: 24px;
+    align-items: center; gap: 20px;
+  }
+  .status-bar.visible { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-info h3 { font-size: 15px; margin-bottom: 4px; }
+  .status-info p  { font-size: 13px; color: var(--muted); }
+  .status-badge {
+    margin-left: auto; padding: 4px 14px;
+    border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: .5px;
+  }
+  .badge-received   { background: #1e3a5f; color: #93c5fd; }
+  .badge-processing { background: #3b1f6e; color: #c4b5fd; }
+  .badge-analyzed   { background: #052e16; color: #86efac; }
+  .badge-error      { background: var(--high-bg); color: #fca5a5; }
+
+  /* Report */
+  #report { margin-top: 40px; display: none; }
+  #report.visible { display: block; }
+
+  .report-header {
+    background: linear-gradient(135deg, #1e1b4b, #1e293b);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 28px;
+  }
+  .report-header .tag {
+    display: inline-block;
+    background: var(--accent); color: white;
+    border-radius: 6px; padding: 3px 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .report-header h2 { font-size: 22px; margin-bottom: 10px; }
+  .report-header p  { color: var(--muted); font-size: 15px; line-height: 1.6; }
+
+  .section-title {
+    font-size: 17px; font-weight: 700;
+    margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  /* Components grid */
+  .components-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px; margin-bottom: 36px;
+  }
+  .comp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color .2s;
+  }
+  .comp-card:hover { border-color: var(--accent); }
+  .comp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .comp-icon { font-size: 22px; }
+  .comp-name { font-weight: 600; font-size: 14px; }
+  .comp-type {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; color: var(--accent2);
+    background: #1e1b4b; padding: 2px 8px; border-radius: 4px;
+    margin-bottom: 8px; display: inline-block;
+  }
+  .comp-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* Risks */
+  .risks-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 36px; }
+  .risk-card {
+    border-radius: 10px; padding: 18px 20px;
+    display: flex; gap: 16px; align-items: flex-start;
+    border: 1px solid transparent;
+  }
+  .risk-card.high { background: var(--high-bg); border-color: #7f1d1d; }
+  .risk-card.medium { background: var(--med-bg); border-color: #78350f; }
+  .risk-card.low  { background: var(--low-bg); border-color: #14532d; }
+  .sev-badge {
+    flex-shrink: 0; padding: 3px 10px; border-radius: 6px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+    margin-top: 2px;
+  }
+  .high .sev-badge  { background: var(--high); color: white; }
+  .medium .sev-badge { background: var(--med); color: #1c1917; }
+  .low .sev-badge   { background: var(--low); color: #052e16; }
+  .risk-content h4  { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .risk-content p   { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* Recommendations */
+  .recs-list { display: flex; flex-direction: column; gap: 12px; }
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 20px;
+    display: flex; gap: 16px; align-items: flex-start;
+  }
+  .pri-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 5px;
+  }
+  .pri-high   { background: var(--high); }
+  .pri-medium { background: var(--med); }
+  .pri-low    { background: var(--low); }
+  .rec-content h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .rec-content p  { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  .error-box {
+    background: var(--high-bg); border: 1px solid #7f1d1d;
+    border-radius: var(--radius); padding: 20px 24px;
+    color: #fca5a5; margin-top: 24px;
+  }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 16px; text-align: right; }
+
+  .new-btn-wrap { text-align: center; margin-top: 32px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏛️</div>
+  <div>
+    <h1>FIAP Secure Systems</h1>
+    <p>Analisador de Diagramas de Arquitetura com IA</p>
+  </div>
+</header>
+
+<main>
+  <!-- Upload -->
+  <div class="upload-card" id="dropZone">
+    <div class="upload-icon">📐</div>
+    <h2>Envie seu Diagrama de Arquitetura</h2>
+    <p>Arraste e solte aqui, ou clique para selecionar um arquivo<br>
+       Formatos suportados: PNG, JPG, WEBP, GIF, PDF &nbsp;·&nbsp; Máx 10 MB</p>
+    <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp,.gif,.pdf"/>
+    <button class="btn" onclick="document.getElementById('fileInput').click()">
+      📂 Selecionar arquivo
+    </button>
+    <div class="file-selected" id="fileName"></div>
+    <br/>
+    <button class="btn" id="sendBtn" disabled onclick="sendFile()" style="margin-top:8px">
+      🚀 Analisar com IA
+    </button>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <div class="spinner" id="spinner"></div>
+    <div class="status-info">
+      <h3 id="statusTitle">Enviando arquivo…</h3>
+      <p id="statusDesc">Aguarde enquanto o sistema processa seu diagrama</p>
+    </div>
+    <span class="status-badge badge-received" id="statusBadge">—</span>
+  </div>
+
+  <div class="error-box" id="errorBox" style="display:none"></div>
+
+  <!-- Report -->
+  <div id="report">
+
+    <div class="report-header">
+      <div class="tag">✅ Análise Concluída</div>
+      <h2 id="rptTitle">Relatório de Arquitetura</h2>
+      <p id="rptSummary"></p>
+    </div>
+
+    <!-- Components -->
+    <div class="section-title">🧩 Componentes Identificados (<span id="compCount">0</span>)</div>
+    <div class="components-grid" id="compGrid"></div>
+
+    <!-- Risks -->
+    <div class="section-title">⚠️ Riscos Arquiteturais (<span id="riskCount">0</span>)</div>
+    <div class="risks-list" id="riskList"></div>
+
+    <!-- Recommendations -->
+    <div class="section-title">💡 Recomendações (<span id="recCount">0</span>)</div>
+    <div class="recs-list" id="recList"></div>
+
+    <p class="meta" id="rptMeta"></p>
+
+    <div class="new-btn-wrap">
+      <button class="btn" onclick="resetUI()">🔄 Analisar outro diagrama</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = 'http://localhost:8000';
+let pollTimer = null;
+let selectedFile = null;
+
+const ICONS = {
+  service:'⚙️', database:'🗄️', queue:'📨', gateway:'🔀',
+  cache:'⚡', load_balancer:'⚖️', external:'🌐', cdn:'🌍',
+  storage:'💾', auth:'🔐', monitoring:'📊', other:'📦'
+};
+
+const SEV_LABEL = { high:'Alto', medium:'Médio', low:'Baixo' };
+const PRI_LABEL = { high:'Alta', medium:'Média', low:'Baixa' };
+
+function setFile(f) {
+  if (!f) return;
+  console.log('[DEBUG] Arquivo selecionado:', f.name, 'Tamanho:', f.size, 'bytes', 'Tipo:', f.type);
+  if (f.size === 0) {
+    showError('O arquivo "' + f.name + '" está vazio (0 bytes). Selecione um arquivo de imagem válido.');
+    return;
+  }
+  selectedFile = f;
+  const kb = (f.size / 1024).toFixed(1);
+  document.getElementById('fileName').textContent = '📎 ' + f.name + ' (' + kb + ' KB)';
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// File selection
+document.getElementById('fileInput').addEventListener('change', e => {
+  setFile(e.target.files[0]);
+});
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  setFile(e.dataTransfer.files[0]);
+});
+
+async function sendFile() {
+  const file = selectedFile;
+  if (!file) return;
+
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('errorBox').style.display = 'none';
+  showStatus('Enviando arquivo…', 'O arquivo está sendo enviado para análise', '—', 'badge-received');
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const res = await fetch(`${API}/api/v1/analyses`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro no envio');
+    pollStatus(data.analysis_id);
+  } catch (err) {
+    showError('Erro ao enviar arquivo: ' + err.message);
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+function pollStatus(id) {
+  showStatus('Diagrama na fila…', `ID: ${id}`, 'RECEIVED', 'badge-received');
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${API}/api/v1/analyses/${id}`);
+      const data = await res.json();
+      updateStatus(data, id);
+    } catch (e) { /* network retry */ }
+  }, 3000);
+}
+
+function updateStatus(data, id) {
+  const s = data.status;
+  if (s === 'RECEIVED') {
+    showStatus('Diagrama recebido…', 'Na fila de processamento', 'RECEIVED', 'badge-received');
+  } else if (s === 'PROCESSING') {
+    showStatus('IA analisando o diagrama…', 'Claude está identificando componentes e riscos', 'PROCESSING', 'badge-processing');
+  } else if (s === 'ANALYZED') {
+    clearInterval(pollTimer);
+    showStatus('Análise concluída!', 'Carregando relatório…', 'ANALYZED', 'badge-analyzed');
+    stopSpinner();
+    fetchReport(id);
+  } else if (s === 'ERROR') {
+    clearInterval(pollTimer);
+    stopSpinner();
+    hideStatus();
+    showError('Erro no processamento: ' + (data.error_message || 'Erro desconhecido'));
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+async function fetchReport(id) {
+  try {
+    const res = await fetch(`${API}/api/v1/analyses/${id}/report`);
+    const data = await res.json();
+    renderReport(data);
+  } catch (e) {
+    showError('Erro ao carregar relatório: ' + e.message);
+  }
+}
+
+function renderReport(r) {
+  hideStatus();
+  document.getElementById('rptSummary').textContent = r.summary;
+  document.getElementById('rptMeta').textContent =
+    `Relatório ID: ${r.report_id} · Gerado em: ${new Date(r.created_at).toLocaleString('pt-BR')}`;
+
+  // Components
+  const cg = document.getElementById('compGrid');
+  document.getElementById('compCount').textContent = r.components.length;
+  cg.innerHTML = r.components.map(c => `
+    <div class="comp-card">
+      <div class="comp-header">
+        <span class="comp-icon">${ICONS[c.type] || '📦'}</span>
+        <span class="comp-name">${esc(c.name)}</span>
+      </div>
+      <div class="comp-type">${esc(c.type)}</div>
+      <div class="comp-desc">${esc(c.description)}</div>
+    </div>`).join('');
+
+  // Risks
+  const rl = document.getElementById('riskList');
+  document.getElementById('riskCount').textContent = r.architectural_risks.length;
+  rl.innerHTML = r.architectural_risks.map(rk => `
+    <div class="risk-card ${rk.severity}">
+      <span class="sev-badge">${SEV_LABEL[rk.severity] || rk.severity}</span>
+      <div class="risk-content">
+        <h4>${esc(rk.title)}</h4>
+        <p>${esc(rk.description)}</p>
+      </div>
+    </div>`).join('');
+
+  // Recommendations
+  const recl = document.getElementById('recList');
+  document.getElementById('recCount').textContent = r.recommendations.length;
+  recl.innerHTML = r.recommendations.map(rc => `
+    <div class="rec-card">
+      <div class="pri-dot pri-${rc.priority}"></div>
+      <div class="rec-content">
+        <h4>${esc(rc.title)} <small style="color:var(--muted);font-weight:400">— prioridade ${PRI_LABEL[rc.priority] || rc.priority}</small></h4>
+        <p>${esc(rc.action)}</p>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('report').classList.add('visible');
+  document.getElementById('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showStatus(title, desc, badge, cls) {
+  const bar = document.getElementById('statusBar');
+  bar.classList.add('visible');
+  document.getElementById('statusTitle').textContent = title;
+  document.getElementById('statusDesc').textContent = desc;
+  const b = document.getElementById('statusBadge');
+  b.className = 'status-badge ' + cls;
+  b.textContent = badge;
+}
+function hideStatus() { document.getElementById('statusBar').classList.remove('visible'); }
+function stopSpinner() { document.getElementById('spinner').style.animationPlayState = 'paused'; }
+function showError(msg) {
+  const b = document.getElementById('errorBox');
+  b.style.display = 'block';
+  b.innerHTML = '❌ <strong>Erro:</strong> ' + esc(msg);
+}
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function resetUI() {
+  clearInterval(pollTimer);
+  selectedFile = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileName').textContent = '';
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('report').classList.remove('visible');
+  hideStatus();
+  document.getElementById('spinner').style.animationPlayState = 'running';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
