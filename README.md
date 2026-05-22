@@ -4,6 +4,10 @@
 
 Sistema back-end que recebe diagramas de arquitetura (imagem ou PDF), processa com IA e gera relatórios técnicos automáticos com componentes, riscos e recomendações.
 
+📹 **Demonstração:** https://vimeo.com/1194863539?share=copy&fl=sv&fe=ci
+
+📦 **Repositório:** https://github.com/acaoliveira/fiap-hackathon-architecture-analyzer
+
 ---
 
 ## Descrição do Problema
